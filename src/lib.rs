@@ -375,12 +375,12 @@ use mintex::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::BufWriter;
 use std::ops::AddAssign;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use thousands::Separable;
 
@@ -935,12 +935,12 @@ struct IgnoreAllocs {
     was_already_ignoring_allocs: bool,
 }
 
-thread_local!(static IGNORE_ALLOCS: Cell<bool> = Cell::new(false));
+static IGNORE_ALLOCS: AtomicBool = AtomicBool::new(false);
 
 impl IgnoreAllocs {
     fn new() -> Self {
         Self {
-            was_already_ignoring_allocs: IGNORE_ALLOCS.with(|b| b.replace(true)),
+            was_already_ignoring_allocs: IGNORE_ALLOCS.swap(true, Ordering::Relaxed),
         }
     }
 }
@@ -950,7 +950,7 @@ impl IgnoreAllocs {
 impl Drop for IgnoreAllocs {
     fn drop(&mut self) {
         if !self.was_already_ignoring_allocs {
-            IGNORE_ALLOCS.with(|b| b.set(false));
+            IGNORE_ALLOCS.store(false, Ordering::Relaxed);
         }
     }
 }
